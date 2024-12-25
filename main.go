@@ -7,7 +7,7 @@ import (
 
 func main() {
 	config.ConnectDatabase()
-  
+    config.DB.AutoMigrate(&models.User{})
 	config.DB.AutoMigrate(&models.Wallet{})
     config.DB.AutoMigrate(&models.TransactionType{})
     config.DB.AutoMigrate(models.Product{})
