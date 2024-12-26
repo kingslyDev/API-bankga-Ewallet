@@ -16,4 +16,6 @@ func main() {
     config.DB.AutoMigrate(&models.TransactionHistory{})
     config.DB.AutoMigrate(&models.Tips{})
     config.DB.AutoMigrate(&models.AdminUser{})
+    config.DB.AutoMigrate(&models.OperatorCard{})
+    config.DB.AutoMigrate(&models.DataPlans{})
 }
