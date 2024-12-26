@@ -14,4 +14,5 @@ func main() {
     config.DB.AutoMigrate(&models.PaymentMethods{})
     config.DB.AutoMigrate(&models.Transaction{})
     config.DB.AutoMigrate(&models.TransactionHistory{})
+    config.DB.AutoMigrate(&models.Tips{})
 }
