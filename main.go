@@ -12,4 +12,6 @@ func main() {
     config.DB.AutoMigrate(&models.TransactionType{})
     config.DB.AutoMigrate(&models.Product{})
     config.DB.AutoMigrate(&models.PaymentMethods{})
+    config.DB.AutoMigrate(&models.Transaction{})
+    config.DB.AutoMigrate(&models.TransactionHistory{})
 }
