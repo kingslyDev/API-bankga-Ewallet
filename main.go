@@ -15,4 +15,5 @@ func main() {
     config.DB.AutoMigrate(&models.Transaction{})
     config.DB.AutoMigrate(&models.TransactionHistory{})
     config.DB.AutoMigrate(&models.Tips{})
+    config.DB.AutoMigrate(&models.AdminUser{})
 }
