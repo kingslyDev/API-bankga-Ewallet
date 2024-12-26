@@ -14,6 +14,7 @@ func RegisterRoutes(router *gin.Engine, db *gorm.DB) {
     authController := &controller.AuthController{DB: db}
     log.Println("Registering routes...")
     router.POST("/api/register", authController.Register)
+	router.POST("/api/login", authController.Login)
     
     // Debugging rute
     log.Println("Routes registered:")

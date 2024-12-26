@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/kingslyDev/API-bankga-Ewallet/config"
 	"github.com/kingslyDev/API-bankga-Ewallet/models"
@@ -13,8 +14,69 @@ import (
 	"gorm.io/gorm"
 )
 
+type LoginRequest struct 
+{
+	Email string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=8"`
+
+}
+
+
+type LoginResponse struct 
+{
+	User *models.User `json:"user"`
+	Token string `json:"token"`
+	TokenType string `json:"token_type"`
+	TokenExpires time.Time `json:"token_expires"`
+}
+
 type AuthController struct {
 	DB *gorm.DB
+}
+
+
+func (ctrl *AuthController) Login(c *gin.Context){
+	var loginReq LoginRequest
+
+	if err := c.ShouldBindJSON(&loginReq); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"Error" : "Invalid Input"})
+		return
+	}
+
+	// query email utk login
+	var user models.User
+	if err := config.DB.Where("email = ?", loginReq.Email).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound{
+			c.JSON(http.StatusUnauthorized, gin.H{"error" : "Your Email / Password is wrong"})
+
+		} else {
+			c.JSON(http.StatusInternalServerError,gin.H{"error" : "server down"})
+		}
+		return
+	
+	}
+
+	// fungsi checkHashpassword
+	if !utils.CheckPasswordHash(loginReq.Password, user.Password){
+		c.JSON(http.StatusUnauthorized, gin.H{"error" : "Your Email / Password is incorrect"})
+		return
+	}
+
+	token, expires, err := utils.GenerateJWT(user.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error" : "Server Down"})
+		return
+	}
+
+	response := LoginResponse {
+		User: &user,
+		Token: token,
+		TokenType: "Bearer",
+		TokenExpires: expires,
+	}
+
+	c.JSON(http.StatusOK,response)
+
 }
 
 // Register untuk registrasi user baru
