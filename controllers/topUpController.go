@@ -13,7 +13,7 @@ import (
 type TopUpRequest struct {
 	Amount            float64 `json:"amount" binding:"required,min=10000"`
 	Pin               string  `json:"pin" binding:"required,len=6"`
-	PaymentMethodCode string  `json:"payment_method_code" binding:"required,oneof=bni_va bca_va bri_va"`
+	PaymentMethodCode string  `json:"payment_method_code" binding:"required,oneof=gopay"`
 }
 
 type TopUpController struct {
@@ -21,14 +21,23 @@ type TopUpController struct {
 }
 
 func (ctrl *TopUpController) TopUp(c *gin.Context) {
-	// Ambil user dari JWT
-	claims, _ := c.Get("claims")
-	userClaims := claims.(*utils.Claims)
+	// Ambil klaim dari JWT
+	claims, exists := c.Get("email")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: no claims found"})
+		return
+	}
 
-	// Cari user di database
+	email, ok := claims.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: invalid claims format"})
+		return
+	}
+
+	// Cari user berdasarkan email
 	var user models.User
-	if err := ctrl.DB.Where("email = ?", userClaims.Email).First(&user).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	if err := ctrl.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: user not found"})
 		return
 	}
 
@@ -39,25 +48,26 @@ func (ctrl *TopUpController) TopUp(c *gin.Context) {
 		return
 	}
 
-	// Cari Wallet user
+	// Cari wallet berdasarkan user ID
 	var wallet models.Wallet
 	if err := ctrl.DB.Where("user_id = ?", user.ID).First(&wallet).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Wallet not found"})
 		return
 	}
 
-	// Periksa PIN
+	// Validasi PIN
 	if wallet.Pin == "" || wallet.Pin != req.Pin {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid PIN"})
 		return
 	}
 
-	// Ambil data TransactionType dan PaymentMethod
+	// Cari TransactionType dan PaymentMethod
 	var transactionType models.TransactionType
 	if err := ctrl.DB.Where("code = ?", "top_up").First(&transactionType).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction type not found"})
 		return
 	}
+
 	var paymentMethod models.PaymentMethods
 	if err := ctrl.DB.Where("code = ?", req.PaymentMethodCode).First(&paymentMethod).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Payment method not found"})
@@ -72,9 +82,10 @@ func (ctrl *TopUpController) TopUp(c *gin.Context) {
 		}
 	}()
 
+	// Generate kode transaksi
 	transactionCode := strings.ToUpper(utils.RandomString(10))
 
-	// Simpan transaksi
+	// Buat objek transaksi
 	desc := "Topup via " + paymentMethod.Name
 	transaction := models.Transaction{
 		UserID:            user.ID,
@@ -86,13 +97,14 @@ func (ctrl *TopUpController) TopUp(c *gin.Context) {
 		Status:            "pending",
 	}
 
+	// Simpan transaksi ke database
 	if err := tx.Create(&transaction).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create transaction"})
 		return
 	}
 
-	
+	// Panggil Midtrans API
 	midtransParams := utils.BuildMidtransParams(transaction.TransactionCode, transaction.Amount, user)
 	midtransResp, err := utils.CallMidtrans(midtransParams)
 	if err != nil {
@@ -104,7 +116,7 @@ func (ctrl *TopUpController) TopUp(c *gin.Context) {
 	// Commit transaksi
 	tx.Commit()
 
-	// Respon berhasil
+	// Respon sukses
 	c.JSON(http.StatusOK, gin.H{
 		"transaction": transaction,
 		"midtrans":    midtransResp,

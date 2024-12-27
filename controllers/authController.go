@@ -102,6 +102,7 @@ func (ctrl *AuthController) Register(c *gin.Context) {
 	var data struct {
 		Name            string `json:"name"`
 		Email           string `json:"email"`
+		Username        string `json:"username"`
 		Password        string `json:"password"`
 		Pin             string `json:"pin"`
 		ProfilePicture  string `json:"profile_picture"`
@@ -168,19 +169,18 @@ func (ctrl *AuthController) Register(c *gin.Context) {
 		return
 	}
 
-	// Commit transaksi jika semua berhasil
+
 	tx.Commit()
 	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully", "user": user})
 }
 
-// Fungsi untuk menghasilkan nomor kartu secara acak
+
 func generateCardNumber() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	return fmt.Sprintf("%016x", b)[:16]
 }
 
-// Fungsi untuk mengembalikan pointer bool
 func boolPtr(b bool) *bool {
 	return &b
 }

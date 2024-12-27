@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
@@ -18,24 +19,29 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Menghapus "Bearer " dan spasi setelahnya
-		tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer"))
-		if tokenString == authHeader {
+		// Validasi format token harus dimulai dengan "Bearer "
+		if !strings.HasPrefix(authHeader, "Bearer ") {
 			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Token Format"})
 			ctx.Abort()
 			return
 		}
 
+		// Menghapus "Bearer " dari header
+		tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+
 		// Verifikasi token menggunakan ParseJWT
 		claims, err := utils.ParseJWT(tokenString)
 		if err != nil {
+			log.Println("JWT Error:", err) // Log kesalahan untuk debugging
 			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
 			ctx.Abort()
 			return
 		}
 
-		// Set email di context untuk digunakan di handler
+		// Set klaim email di context untuk digunakan di handler
 		ctx.Set("email", claims.Email)
+
+		// Lanjutkan ke handler berikutnya
 		ctx.Next()
 	}
 }
