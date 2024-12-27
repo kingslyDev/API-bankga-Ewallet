@@ -34,6 +34,24 @@ type AuthController struct {
 	DB *gorm.DB
 }
 
+func (ctrl *AuthController) GetProfile(c *gin.Context) {
+	email, exists := c.Get("email")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	// Cari pengguna berdasarkan email
+	var user models.User
+	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"user": user})
+}
+
+
 
 func (ctrl *AuthController) Login(c *gin.Context){
 	var loginReq LoginRequest

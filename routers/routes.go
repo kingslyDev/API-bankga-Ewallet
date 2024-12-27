@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	controller "github.com/kingslyDev/API-bankga-Ewallet/controllers" // sesuaikan nama import
+	"github.com/kingslyDev/API-bankga-Ewallet/controllers/middleware"
 	"gorm.io/gorm"
 )
 
@@ -12,13 +13,16 @@ import (
 func RegisterRoutes(router *gin.Engine, db *gorm.DB) {
   
     authController := &controller.AuthController{DB: db}
-    log.Println("Registering routes...")
-    router.POST("/api/register", authController.Register)
+	topUpController := &controller.TopUpController{DB: db}
+	log.Println("Registering routes...")
+	router.POST("/api/register", authController.Register)
 	router.POST("/api/login", authController.Login)
-    
-    // Debugging rute
-    log.Println("Routes registered:")
-    for _, route := range router.Routes() {
-        log.Printf("Route: %s %s", route.Method, route.Path)
-    }
+	
+	protected := router.Group("/api")
+	protected.Use(middleware.JWTAuthMiddleware())
+	{
+		protected.GET("/profile", authController.GetProfile)
+		protected.POST("/topup", topUpController.TopUp)
+	}
+   
 }
