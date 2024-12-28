@@ -14,26 +14,23 @@ import (
 	"gorm.io/gorm"
 )
 
-type LoginRequest struct 
-{
-	Email string `json:"email" binding:"required,email"`
+type LoginRequest struct {
+	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=8"`
-
 }
 
-
-type LoginResponse struct 
-{
-	User *models.User `json:"user"`
-	Token string `json:"token"`
-	TokenType string `json:"token_type"`
-	TokenExpires time.Time `json:"token_expires"`
+type LoginResponse struct {
+	User        *models.User `json:"user"`
+	Token       string       `json:"token"`
+	TokenType   string       `json:"token_type"`
+	TokenExpires time.Time   `json:"token_expires"`
 }
 
 type AuthController struct {
 	DB *gorm.DB
 }
 
+// GetProfile retrieves the profile of the currently authenticated user
 func (ctrl *AuthController) GetProfile(c *gin.Context) {
 	email, exists := c.Get("email")
 	if !exists {
@@ -41,7 +38,6 @@ func (ctrl *AuthController) GetProfile(c *gin.Context) {
 		return
 	}
 
-	// Cari pengguna berdasarkan email
 	var user models.User
 	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
@@ -51,84 +47,87 @@ func (ctrl *AuthController) GetProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"user": user})
 }
 
-
-
-func (ctrl *AuthController) Login(c *gin.Context){
+// Login authenticates a user and returns a JWT token
+func (ctrl *AuthController) Login(c *gin.Context) {
 	var loginReq LoginRequest
 
+	// Validate input
 	if err := c.ShouldBindJSON(&loginReq); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"Error" : "Invalid Input"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Input"})
 		return
 	}
 
-	// query email utk login
+	// Find user by email
 	var user models.User
 	if err := config.DB.Where("email = ?", loginReq.Email).First(&user).Error; err != nil {
-		if err == gorm.ErrRecordNotFound{
-			c.JSON(http.StatusUnauthorized, gin.H{"error" : "Your Email / Password is wrong"})
-
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Incorrect email or password"})
 		} else {
-			c.JSON(http.StatusInternalServerError,gin.H{"error" : "server down"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
 		}
 		return
-	
 	}
 
-	// fungsi checkHashpassword
-	if !utils.CheckPasswordHash(loginReq.Password, user.Password){
-		c.JSON(http.StatusUnauthorized, gin.H{"error" : "Your Email / Password is incorrect"})
+	// Check password hash
+	if !utils.CheckPasswordHash(loginReq.Password, user.Password) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Incorrect email or password"})
 		return
 	}
 
+	// Generate JWT token
 	token, expires, err := utils.GenerateJWT(user.Email)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error" : "Server Down"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
 		return
 	}
 
-	response := LoginResponse {
-		User: &user,
-		Token: token,
-		TokenType: "Bearer",
+	response := LoginResponse{
+		User:         &user,
+		Token:        token,
+		TokenType:    "Bearer",
 		TokenExpires: expires,
 	}
 
-	c.JSON(http.StatusOK,response)
-
+	c.JSON(http.StatusOK, response)
 }
 
-// Register untuk registrasi user baru
+// Register registers a new user and creates a wallet
 func (ctrl *AuthController) Register(c *gin.Context) {
 	var data struct {
-		Name            string `json:"name"`
-		Email           string `json:"email"`
-		Username        string `json:"username"`
-		Password        string `json:"password"`
-		Pin             string `json:"pin"`
-		ProfilePicture  string `json:"profile_picture"`
-		KTP             string `json:"ktp"`
+		Name           string `json:"name" binding:"required"`
+		Email          string `json:"email" binding:"required,email"`
+		Username       string `json:"username" binding:"required,alphanum"`
+		Password       string `json:"password" binding:"required,min=8"`
+		Pin            string `json:"pin" binding:"required,len=6"`
+		ProfilePicture string `json:"profile_picture"`
+		KTP            string `json:"ktp"`
 	}
 
-	// Bind JSON
+	// Validate input
 	if err := c.ShouldBindJSON(&data); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
 
-	// Validasi panjang PIN
+	// Validate PIN length
 	if len(data.Pin) != 6 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "PIN must be 6 digits"})
 		return
 	}
 
-	// Cek jika email sudah terdaftar
-	var existingUser models.User
-	if err := config.DB.Where("email = ?", data.Email).First(&existingUser).Error; err != gorm.ErrRecordNotFound {
+	// Check if email already exists
+	if exists := isEmailExists(data.Email); exists {
 		c.JSON(http.StatusConflict, gin.H{"error": "Email already in use"})
 		return
 	}
 
-	// Mulai transaksi
+	// Check if username already exists
+	if exists := isUsernameExists(data.Username); exists {
+		c.JSON(http.StatusConflict, gin.H{"error": "Username already in use"})
+		return
+	}
+
+	// Start transaction
 	tx := config.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -136,14 +135,15 @@ func (ctrl *AuthController) Register(c *gin.Context) {
 		}
 	}()
 
-	// Upload gambar profile dan KTP
+	// Upload profile picture and KTP
 	profilePicturePath := utils.UploadBase64Image(data.ProfilePicture, "profile_pictures")
 	ktpPath := utils.UploadBase64Image(data.KTP, "ktp")
 
-	// Buat user baru
+	// Create user
 	user := models.User{
 		Name:           data.Name,
 		Email:          data.Email,
+		Username:       data.Username,
 		Password:       utils.HashPassword(data.Password),
 		ProfilePicture: profilePicturePath,
 		KTP:            ktpPath,
@@ -156,11 +156,11 @@ func (ctrl *AuthController) Register(c *gin.Context) {
 		return
 	}
 
-	// Buat wallet baru
+	// Create wallet
 	wallet := models.Wallet{
 		UserID:     user.ID,
 		CardNumber: generateCardNumber(),
-		Pin:        data.Pin, // PIN diambil dari input
+		Pin:        data.Pin,
 	}
 
 	if err := tx.Create(&wallet).Error; err != nil {
@@ -169,18 +169,31 @@ func (ctrl *AuthController) Register(c *gin.Context) {
 		return
 	}
 
-
+	// Commit transaction
 	tx.Commit()
 	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully", "user": user})
 }
 
+// Helper function to check if email exists
+func isEmailExists(email string) bool {
+	var user models.User
+	return config.DB.Where("email = ?", email).First(&user).Error == nil
+}
 
+// Helper function to check if username exists
+func isUsernameExists(username string) bool {
+	var user models.User
+	return config.DB.Where("username = ?", username).First(&user).Error == nil
+}
+
+// Generate a random 16-digit card number
 func generateCardNumber() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
-	return fmt.Sprintf("%016x", b)[:16]
+	return fmt.Sprintf("%016x", b)
 }
 
+// Return a pointer to a bool value
 func boolPtr(b bool) *bool {
 	return &b
 }

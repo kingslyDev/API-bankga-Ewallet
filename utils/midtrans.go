@@ -1,6 +1,9 @@
 package utils
 
 import (
+	"encoding/json"
+	"errors"
+	"net/http"
 	"os"
 
 	"github.com/kingslyDev/API-bankga-Ewallet/models"
@@ -46,4 +49,32 @@ func BuildMidtransParams(orderID string, amount float64, user models.User) *snap
 		},
 		EnabledPayments: []snap.SnapPaymentType{snap.PaymentTypeGopay}, // Membatasi hanya untuk Gopay
 	}
+}
+
+// MidtransNotification - Struct untuk notifikasi dari Midtrans
+type MidtransNotification struct {
+	TransactionStatus string `json:"transaction_status"`
+	OrderID           string `json:"order_id"`
+	PaymentType       string `json:"payment_type"`
+	FraudStatus       string `json:"fraud_status"`
+}
+// ParseMidtransNotification - Fungsi untuk memparsing notifikasi dari Midtrans
+func ParseMidtransNotification(r *http.Request) (*MidtransNotification, error) {
+	// Validasi Content-Type
+	if r.Header.Get("Content-Type") != "application/json" {
+		return nil, errors.New("invalid content type, expected application/json")
+	}
+
+	// Decode payload JSON
+	var notif MidtransNotification
+	if err := json.NewDecoder(r.Body).Decode(&notif); err != nil {
+		return nil, err
+	}
+
+	// Validasi field wajib
+	if notif.OrderID == "" || notif.TransactionStatus == "" || notif.PaymentType == "" {
+		return nil, errors.New("missing required fields in notification payload")
+	}
+
+	return &notif, nil
 }
