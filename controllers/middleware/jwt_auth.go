@@ -6,10 +6,12 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/kingslyDev/API-bankga-Ewallet/models"
 	"github.com/kingslyDev/API-bankga-Ewallet/utils"
+	"gorm.io/gorm"
 )
 
-func JWTAuthMiddleware() gin.HandlerFunc {
+func JWTAuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		// Ambil header Authorization
 		authHeader := ctx.GetHeader("Authorization")
@@ -38,8 +40,17 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Set klaim email di context untuk digunakan di handler
-		ctx.Set("email", claims.Email)
+		// Ambil user berdasarkan email dari klaim token
+		var user models.User
+		if err := db.Where("email = ?", claims.Email).First(&user).Error; err != nil {
+			log.Println("User not found:", err)
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+			ctx.Abort()
+			return
+		}
+
+		// Set objek user ke dalam konteks
+		ctx.Set("user", &user)
 
 		// Lanjutkan ke handler berikutnya
 		ctx.Next()
