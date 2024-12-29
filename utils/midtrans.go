@@ -47,7 +47,7 @@ func BuildMidtransParams(orderID string, amount float64, user models.User) *snap
 			LName: "",
 			Email: user.Email,
 		},
-		EnabledPayments: []snap.SnapPaymentType{snap.PaymentTypeGopay}, // Membatasi hanya untuk Gopay
+		EnabledPayments: []snap.SnapPaymentType{snap.PaymentTypeGopay,}, // Membatasi hanya untuk Gopay
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 type TopUpRequest struct {
 	Amount            float64 `json:"amount" binding:"required,min=10000"`
 	Pin               string  `json:"pin" binding:"required,len=6"`
-	PaymentMethodCode string  `json:"payment_method_code" binding:"required,oneof=gopay"`
+	PaymentMethodCode string  `json:"payment_method_code" binding:"required,oneof=gopay bca_va"`
 }
 
 type TopUpController struct {

@@ -14,6 +14,7 @@ func RegisterRoutes(router *gin.Engine, db *gorm.DB) {
   
     authController := &controller.AuthController{DB: db}
 	topUpController := &controller.TopUpController{DB: db}
+	webhookController := &controller.WebhookController{DB: db}
 	log.Println("Registering routes...")
 	router.POST("/api/register", authController.Register)
 	router.POST("/api/login", authController.Login)
@@ -24,5 +25,5 @@ func RegisterRoutes(router *gin.Engine, db *gorm.DB) {
 		protected.GET("/profile", authController.GetProfile)
 		protected.POST("/topup", topUpController.TopUp)
 	}
-   
+	router.POST("/api/webhook/midtrans", webhookController.UpdateTransaction)
 }
