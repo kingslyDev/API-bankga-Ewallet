@@ -23,7 +23,7 @@ func LoadEnv() error {
 // GenerateJWT membuat token JWT
 func GenerateJWT(email string) (string, time.Time, error) {
 	if err := LoadEnv(); err != nil {
-		return "", time.Time{}, fmt.Errorf("error loading .env file")
+		return "", time.Time{}, fmt.Errorf("error loading .env file: %v", err)
 	}
 
 	jwtKey := []byte(os.Getenv("JWT_SECRET_KEY"))
@@ -38,6 +38,7 @@ func GenerateJWT(email string) (string, time.Time, error) {
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
 	}
+	
 
 	// Membuat token dengan klaim yang telah ditentukan
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -45,7 +46,7 @@ func GenerateJWT(email string) (string, time.Time, error) {
 	// Menandatangani token dengan kunci JWT
 	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {
-		return "", time.Time{}, err
+		return "", time.Time{}, fmt.Errorf("error signing token: %v", err)
 	}
 
 	return tokenString, expirationTime, nil
@@ -54,7 +55,7 @@ func GenerateJWT(email string) (string, time.Time, error) {
 // ParseJWT memverifikasi dan mem-parsing token JWT
 func ParseJWT(tokenString string) (*Claims, error) {
 	if err := LoadEnv(); err != nil {
-		return nil, fmt.Errorf("error loading .env file")
+		return nil, fmt.Errorf("error loading .env file: %v", err)
 	}
 
 	jwtKey := []byte(os.Getenv("JWT_SECRET_KEY"))
@@ -62,14 +63,22 @@ func ParseJWT(tokenString string) (*Claims, error) {
 		return nil, fmt.Errorf("JWT_SECRET_KEY is not set in .env")
 	}
 
-	// Mendeklarasikan klaim untuk menyimpan data yang diparse dari token
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return jwtKey, nil
 	})
 
-	if err != nil || !token.Valid {
-		return nil, fmt.Errorf("invalid or expired token")
+	if err != nil {
+		return nil, fmt.Errorf("error parsing token: %v", err)
+	}
+
+	if !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+
+	// Cek jika token sudah kadaluarsa
+	if claims.ExpiresAt != nil && claims.ExpiresAt.Time.Before(time.Now()) {
+		return nil, fmt.Errorf("token expired")
 	}
 
 	return claims, nil

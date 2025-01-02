@@ -6,12 +6,10 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/kingslyDev/API-bankga-Ewallet/models"
 	"github.com/kingslyDev/API-bankga-Ewallet/utils"
-	"gorm.io/gorm"
 )
 
-func JWTAuthMiddleware(db *gorm.DB) gin.HandlerFunc {
+func JWTAuthMiddleware() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		// Ambil header Authorization
 		authHeader := ctx.GetHeader("Authorization")
@@ -30,6 +28,7 @@ func JWTAuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 
 		// Menghapus "Bearer " dari header
 		tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+		log.Println("Received token:", tokenString) // Log untuk debugging
 
 		// Verifikasi token menggunakan ParseJWT
 		claims, err := utils.ParseJWT(tokenString)
@@ -40,17 +39,9 @@ func JWTAuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Ambil user berdasarkan email dari klaim token
-		var user models.User
-		if err := db.Where("email = ?", claims.Email).First(&user).Error; err != nil {
-			log.Println("User not found:", err)
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
-			ctx.Abort()
-			return
-		}
-
-		// Set objek user ke dalam konteks
-		ctx.Set("user", &user)
+		// Set klaim email di context untuk digunakan di handler
+		ctx.Set("email", claims.Email)
+		log.Println("Email set in context:", claims.Email) // Log untuk memastikan email berhasil disimpan
 
 		// Lanjutkan ke handler berikutnya
 		ctx.Next()
